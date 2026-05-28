@@ -111,7 +111,12 @@
 
 <div class="app" id="main-app" style="display:none">
   <aside class="sidebar">
-    <div class="logo">◈ FinPro</div>
+    <div class="logo">
+      <div class="logo-mark">◈</div>
+      <div>
+        <div class="logo-text">FinPro</div>
+      </div>
+    </div>
     <nav class="nav">
       <div class="nav-group-label">Geral</div>
       <button class="nav-btn active" data-view="dashboard"><i>⬡</i>Painel</button>
@@ -593,6 +598,9 @@
   <button class="mob-btn" data-view="more"><span>☰</span><label>Menu</label></button>
 </nav>
 
+<!-- FAB — Quick add transaction -->
+<button class="mob-fab" id="mob-fab" aria-label="Nova transação">＋</button>
+
 <!-- MOBILE MORE DRAWER -->
 <div class="mob-drawer" id="mob-drawer" style="display:none">
   <div class="mob-drawer-overlay" id="mob-drawer-overlay"></div>
@@ -650,6 +658,11 @@ document.querySelectorAll('.mob-drawer-btn').forEach(btn => {
 
 document.getElementById('mob-drawer-overlay').addEventListener('click', () => {
   document.getElementById('mob-drawer').style.display = 'none';
+});
+
+// FAB
+document.getElementById('mob-fab')?.addEventListener('click', () => {
+  switchView('add');
 });
 
 // Sync sidebar nav with mobile nav
