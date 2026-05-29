@@ -194,7 +194,7 @@ function updateSidebar(){
       const bal=getAccountBalance(a.id);
       return `<div class="sb-acc-item">
         <div class="sb-acc-left"><div class="sb-acc-dot" style="background:${a.color}"></div><div class="sb-acc-name">${a.name}</div></div>
-        <div class="sb-acc-bal" style="color:${bal>=0?'var(--grn2)':'var(--red2)'}">${bal<0?'−':''}${fmt(bal).replace('R$ ','')}</div>
+        <div class="sb-acc-bal" style="color:${bal>=0?'var(--grn-l)':'var(--red-l)'}">${bal<0?'−':''}${fmt(bal).replace('R$ ','')}</div>
       </div>`;
     }).join('');
 }
@@ -209,114 +209,6 @@ document.getElementById('dash-next')?.addEventListener('click',()=>{
   dashMonth++; if(dashMonth>11){dashMonth=0;dashYear++;} renderDashboard();
 });
 
-function renderDashboard(){
-  document.getElementById('dash-month-label').textContent = mName(dashYear,dashMonth);
-  const txs   = getTxForMonth(dashYear,dashMonth);
-  const scheds = getSchedForMonth(dashYear,dashMonth);
-  const insts  = getInstForMonth(dashYear,dashMonth);
-
-  const income  = getMonthIncome(dashYear,dashMonth);
-  const expense = getMonthExpense(dashYear,dashMonth);
-  const balance = income - expense;
-  const net     = getTotalPatrimony();
-
-  document.getElementById('d-income').textContent  = fmt(income);
-  document.getElementById('d-expense').textContent = fmt(expense);
-  const bEl=document.getElementById('d-balance');
-  bEl.textContent=(balance<0?'−':'')+fmt(balance);
-  bEl.style.color=balance>=0?'var(--grn2)':'var(--red2)';
-  const nEl=document.getElementById('d-net');
-  nEl.textContent=(net<0?'−':'')+fmt(net);
-  nEl.style.color=net>=0?'var(--grn2)':'var(--red2)';
-
-  // PIE
-  const catMap={};
-  txs.filter(t=>t.type==='expense').forEach(t=>{catMap[t.category]=(catMap[t.category]||0)+t.amount;});
-  scheds.filter(s=>s.type==='expense').forEach(s=>{catMap[s.category]=(catMap[s.category]||0)+s.amount;});
-  insts.forEach(i=>{catMap[i.category]=(catMap[i.category]||0)+i.perMonth;});
-  destroyChart('c-pie');
-  const pc=document.getElementById('c-pie');
-  if(Object.keys(catMap).length){
-    chartInstances['c-pie']=new Chart(pc,{type:'doughnut',data:{
-      labels:Object.keys(catMap).map(c=>CAT[c]||c),
-      datasets:[{data:Object.values(catMap),backgroundColor:CHART_COLORS,borderWidth:0,hoverOffset:4}]
-    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#888',font:{size:10},padding:7,boxWidth:9}}}}});
-  } else {
-    const ctx=pc.getContext('2d');ctx.clearRect(0,0,pc.width,pc.height);
-    ctx.fillStyle='#444';ctx.textAlign='center';ctx.font='12px DM Sans';ctx.fillText('Sem dados',pc.width/2,pc.height/2);
-  }
-
-  // LINE
-  const ll=[],li=[],le=[],lb=[];
-  for(let i=5;i>=0;i--){
-    let m=dashMonth-i,y=dashYear;
-    while(m<0){m+=12;y--;}
-    ll.push(mShort(y,m));
-    li.push(getMonthIncome(y,m));
-    le.push(getMonthExpense(y,m));
-    lb.push(getMonthIncome(y,m)-getMonthExpense(y,m));
-  }
-  destroyChart('c-line');
-  chartInstances['c-line']=new Chart(document.getElementById('c-line'),{type:'line',data:{labels:ll,datasets:[
-    {label:'Entradas',data:li,borderColor:'#27ae60',backgroundColor:'rgba(39,174,96,.07)',tension:.4,fill:true,pointRadius:3,borderWidth:2},
-    {label:'Saídas',  data:le,borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,.07)',tension:.4,fill:true,pointRadius:3,borderWidth:2},
-    {label:'Saldo',   data:lb,borderColor:'#3498db',backgroundColor:'transparent',tension:.4,borderDash:[4,3],pointRadius:3,borderWidth:2}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{size:10},boxWidth:10}}},scales:{
-    x:{grid:{color:'#1a1a1f'},ticks:{color:'#555',font:{size:10}}},
-    y:{grid:{color:'#1a1a1f'},ticks:{color:'#555',font:{size:10},callback:v=>'R$'+Math.round(v)}}
-  }}});
-
-  // BUDGET panel
-  const budEl=document.getElementById('d-budget');
-  const monthBudgets=budgets.filter(b=>b.month===mkKey(dashYear,dashMonth));
-  if(!monthBudgets.length){ budEl.innerHTML='<div class="empty-state">Sem limites definidos.</div>'; }
-  else {
-    budEl.innerHTML=monthBudgets.map(b=>{
-      const spent=(catMap[b.category]||0);
-      const pct=Math.min(Math.round(spent/b.limit*100),100);
-      const color=pct>=90?'var(--red2)':pct>=70?'var(--ylw2)':'var(--grn2)';
-      return `<div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-          <span>${CAT[b.category]||b.category}</span><span style="color:${color}">${pct}%</span>
-        </div>
-        <div style="height:3px;background:var(--bdr);border-radius:99px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${color};border-radius:99px"></div>
-        </div>
-        <div style="font-size:10px;color:var(--tx3);margin-top:3px">${fmt(spent)} / ${fmt(b.limit)}</div>
-      </div>`;
-    }).join('');
-  }
-
-  // INSTALLMENTS panel
-  const diEl=document.getElementById('d-inst');
-  const active=installments.filter(i=>i.paid<i.count);
-  diEl.innerHTML=active.length?active.slice(0,5).map(i=>{
-    const pct=Math.round(i.paid/i.count*100);
-    return `<div class="di-item">
-      <div class="di-top"><span>${i.desc}</span><span style="color:var(--red2)">${fmt(i.perMonth)}/mês</span></div>
-      <div class="di-bar-bg"><div class="di-bar" style="width:${pct}%"></div></div>
-      <div style="font-size:10px;color:var(--tx3);margin-top:2px">${i.paid}/${i.count} pagas</div>
-    </div>`;
-  }).join(''):'<div class="empty-state">Sem parcelas.</div>';
-
-  // SCHEDULED panel
-  const sEl=document.getElementById('d-sched');
-  const now=new Date();
-  const upcoming=scheds.sort((a,b)=>a.computedDay-b.computedDay).slice(0,6);
-  sEl.innerHTML=upcoming.length?upcoming.map(s=>`<div class="sc-item">
-    <div><div class="sc-name">${s.desc}</div><div class="sc-day">Dia ${s.computedDay}</div></div>
-    <div class="sc-amt ${s.type}">${s.type==='expense'?'−':'+'}${fmt(s.amount)}</div>
-  </div>`).join(''):'<div class="empty-state">Sem agendamentos.</div>';
-
-  // RECENT
-  const recEl=document.getElementById('d-recent');
-  const recent=[...txs].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
-  recEl.innerHTML=recent.length?recent.map(t=>`<div class="r-item">
-    <div class="r-info"><div class="r-dot ${t.type}"></div><div><div class="r-desc">${t.desc}</div><div class="r-date">${fmtDt(t.date)}</div></div></div>
-    <div class="r-amt ${t.type}">${t.type==='expense'?'−':'+'}${fmt(t.amount)}</div>
-  </div>`).join(''):'<div class="empty-state">Sem transações.</div>';
-}
-
 // ═══════════════════════════════════════════════════════════════════
 // ACCOUNTS
 // ═══════════════════════════════════════════════════════════════════
@@ -329,7 +221,7 @@ function renderAccounts(){
       <div class="acc-stripe" style="background:${a.color}"></div>
       <div class="acc-type-label">${ACC_TYPES[a.type]||a.type}</div>
       <div class="acc-name">${a.name}</div>
-      <div class="acc-bal" style="color:${bal>=0?'var(--grn2)':'var(--red2)'}">${bal<0?'−':''}${fmt(bal)}</div>
+      <div class="acc-bal" style="color:${bal>=0?'var(--grn-l)':'var(--red-l)'}">${bal<0?'−':''}${fmt(bal)}</div>
       <div class="acc-actions">
         <button class="acc-btn" onclick="editAccount(${a.id})">Editar</button>
         <button class="acc-btn del" onclick="deleteAccount(${a.id})">Excluir</button>
@@ -469,12 +361,12 @@ function renderScheduled(){
       <div class="sched-left">
         <div class="sched-stripe" style="background:${s.type==='income'?'var(--grn)':'var(--red)'}"></div>
         <div>
-          <div class="sched-name">${s.desc} ${!s.active?'<span style="font-size:10px;color:var(--tx3)">(pausado)</span>':''}</div>
+          <div class="sched-name">${s.desc} ${!s.active?'<span style="font-size:10px;color:var(--tx-3)">(pausado)</span>':''}</div>
           <div class="sched-meta">${CAT[s.category]||s.category} · ${acc?acc.name:'?'} · ${dayLabel}/mês</div>
         </div>
       </div>
       <div class="sched-right">
-        <div class="sched-amt" style="color:${s.type==='income'?'var(--grn2)':'var(--red2)'}">${s.type==='expense'?'−':'+'}${fmt(s.amount)}</div>
+        <div class="sched-amt" style="color:${s.type==='income'?'var(--grn-l)':'var(--red-l)'}">${s.type==='expense'?'−':'+'}${fmt(s.amount)}</div>
         <button class="small-btn" onclick="toggleSched(${s.id})">${s.active?'Pausar':'Ativar'}</button>
         <button class="small-btn del" onclick="deleteSched(${s.id})">✕</button>
       </div>
@@ -508,33 +400,7 @@ document.getElementById('inst-form')?.addEventListener('submit',e=>{
   showToast('Parcela registrada!');
 });
 
-function renderInstallments(){
-  const el=document.getElementById('inst-list');
-  if(!installments.length){ el.innerHTML='<div class="empty-state">Nenhuma parcela registrada.</div>'; return; }
-  el.innerHTML=installments.map(i=>{
-    const pct=Math.round(i.paid/i.count*100);
-    const rem=i.count-i.paid;
-    const done=i.paid>=i.count;
-    const acc=accounts.find(a=>a.id===i.accountId);
-    const [sy,sm]=i.start.split('-').map(Number);
-    const endDate=new Date(sy,sm-1+i.count-1,1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'});
-    return `<div class="inst-item">
-      <div class="inst-top">
-        <div class="inst-name">${i.desc}</div>
-        <div class="inst-badge ${done?'done':'active'}">${done?'Quitado':`${rem} restantes`}</div>
-      </div>
-      <div class="inst-meta">${fmt(i.perMonth)}/mês · Total ${fmt(i.total)} · ${CAT[i.category]||i.category} · ${acc?acc.name:'?'} · até ${endDate}</div>
-      <div class="inst-prog"><div class="inst-bar ${done?'done':'active'}" style="width:${pct}%"></div></div>
-      <div class="inst-info"><span>${i.paid}/${i.count} pagas (${pct}%)</span><span>${done?'Quitado':fmt(i.perMonth*rem)+' restante'}</span></div>
-      <div class="inst-actions">
-        ${!done?`<button class="small-btn" onclick="payInst(${i.id})">✓ Pagar parcela</button>`:''}
-        <button class="small-btn del" onclick="delInst(${i.id})">✕ Remover</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-window.payInst=id=>{ const i=installments.find(x=>x.id===id); if(i&&i.paid<i.count){i.paid++;save();renderInstallments();renderDashboard();showToast('Parcela marcada como paga!');} };
-window.delInst=id=>{ installments=installments.filter(x=>x.id!==id);save();renderInstallments();renderDashboard();showToast('Parcela removida.'); };
+// renderInstallments → replaced below
 
 // ═══════════════════════════════════════════════════════════════════
 // BUDGET
@@ -557,7 +423,7 @@ function renderBudget(){
     grid.innerHTML=monthBudgets.map(b=>{
       const spent=catSpent[b.category]||0;
       const pct=Math.min(Math.round(spent/b.limit*100),100);
-      const color=pct>=100?'var(--red2)':pct>=75?'var(--ylw2)':'var(--grn2)';
+      const color=pct>=100?'var(--red-l)':pct>=75?'var(--ylw-l)':'var(--grn-l)';
       const remaining=b.limit-spent;
       return `<div class="budget-item">
         <div class="bud-top"><span class="bud-cat">${CAT[b.category]||b.category}</span><span class="bud-pct" style="color:${color}">${pct}%</span></div>
@@ -715,7 +581,7 @@ function renderHistory(){
   document.getElementById('h-summary').innerHTML=`
     <div class="hs-item"><div class="hs-lbl">Entradas</div><div class="hs-val pos">${fmt(totInc)}</div></div>
     <div class="hs-item"><div class="hs-lbl">Saídas</div><div class="hs-val neg">${fmt(totExp)}</div></div>
-    <div class="hs-item"><div class="hs-lbl">Saldo</div><div class="hs-val" style="color:${totBal>=0?'var(--grn2)':'var(--red2)'}">${totBal<0?'−':''}${fmt(totBal)}</div></div>`;
+    <div class="hs-item"><div class="hs-lbl">Saldo</div><div class="hs-val" style="color:${totBal>=0?'var(--grn-l)':'var(--red-l)'}">${totBal<0?'−':''}${fmt(totBal)}</div></div>`;
   const el=document.getElementById('history-list');
   if(!list.length){ el.innerHTML='<div class="empty-state">Nenhuma transação encontrada.</div>'; return; }
   el.innerHTML=list.map(t=>{
@@ -960,7 +826,7 @@ function renderInvoiceDetail(cardId, invKey) {
     </div>
     <div class="inv-kpi"><div class="inv-kpi-lbl">Nº de Compras</div><div class="inv-kpi-val">${expenses.length}</div>
       ${status!=='paid'&&total>0?`<button class="small-btn" style="margin-top:8px" onclick="openPayInvoice(${cardId},'${invKey}')">Pagar Fatura</button>`:''}
-      ${payment?`<div style="font-size:11px;color:var(--grn2);margin-top:4px">Pago em ${fmtDt(payment.date)} · ${fmt(payment.amount)}</div>`:''}
+      ${payment?`<div style="font-size:11px;color:var(--grn-l);margin-top:4px">Pago em ${fmtDt(payment.date)} · ${fmt(payment.amount)}</div>`:''}
     </div>`;
 
   if (!expenses.length) {
@@ -972,7 +838,7 @@ function renderInvoiceDetail(cardId, invKey) {
     <div class="inv-exp-header"><div>Descrição</div><div>Data</div><div>Valor</div></div>
     ${sorted.map(t=>`<div class="inv-exp-row">
       <div><div class="inv-exp-desc">${t.desc}</div><div class="inv-exp-meta">${CAT[t.category]||t.category}${t.note?' · '+t.note:''}</div></div>
-      <div style="color:var(--tx3);font-size:12px;white-space:nowrap">${fmtDt(t.date)}</div>
+      <div style="color:var(--tx-3);font-size:12px;white-space:nowrap">${fmtDt(t.date)}</div>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="neg" style="font-family:var(--fd);font-weight:700">${fmt(t.amount)}</span>
         <button class="del-btn" onclick="delCardTx(${t.id})">✕</button>
@@ -995,7 +861,7 @@ window.openPayInvoice = (cardId, invKey) => {
   const [iy,im] = invKey.split('-').map(Number);
   const label = new Date(iy,im-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
   document.getElementById('pay-inv-info').innerHTML =
-    `<strong>${card.name}</strong> · Fatura de ${label}<br>Total: <strong style="color:var(--red2)">${fmt(total)}</strong>`;
+    `<strong>${card.name}</strong> · Fatura de ${label}<br>Total: <strong style="color:var(--red-l)">${fmt(total)}</strong>`;
   document.getElementById('pay-inv-amount').value = total.toFixed(2);
   document.getElementById('pay-inv-date').value = today();
   // pre-select card's payment account
@@ -1367,12 +1233,12 @@ function renderDashboard() {
   const heroEl = document.getElementById('d-balance');
   if (heroEl) {
     heroEl.textContent = (balance<0?'−':'')+fmt(balance);
-    heroEl.style.color = balance>=0 ? '#fff' : 'var(--red2)';
+    heroEl.style.color = balance>=0 ? '#fff' : 'var(--red-l)';
   }
   const netEl = document.getElementById('d-net');
   if (netEl) {
     netEl.textContent = (net<0?'−':'')+fmt(net);
-    netEl.style.color = net>=0 ? 'rgba(255,255,255,.7)' : 'var(--red2)';
+    netEl.style.color = net>=0 ? 'rgba(255,255,255,.7)' : 'var(--red-l)';
   }
 
   // ── Hero bar (income vs expense ratio)
@@ -1382,7 +1248,7 @@ function renderDashboard() {
   if (barFill && income+expense > 0) {
     const pct = Math.min(Math.round(expense/(income||expense)*100),100);
     barFill.style.width = pct+'%';
-    barFill.style.background = pct>90?'var(--red2)':pct>70?'var(--ylw2)':'var(--grn2)';
+    barFill.style.background = pct>90?'var(--red-l)':pct>70?'var(--ylw-l)':'var(--grn-l)';
     if (incLabel) incLabel.textContent = '↑ '+fmt(income);
     if (expLabel) expLabel.textContent = '↓ '+fmt(expense);
   } else {
@@ -1491,7 +1357,7 @@ function renderDashboard() {
       budEl.innerHTML=monthBudgets.map(b=>{
         const spent=catMap[b.category]||0;
         const pct=Math.min(Math.round(spent/b.limit*100),100);
-        const color=pct>=90?'var(--red2)':pct>=70?'var(--ylw2)':'var(--grn2)';
+        const color=pct>=90?'var(--red-l)':pct>=70?'var(--ylw-l)':'var(--grn-l)';
         return `<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
             <span>${CAT[b.category]||b.category}</span><span style="color:${color};font-weight:700">${pct}%</span>
@@ -1499,7 +1365,7 @@ function renderDashboard() {
           <div style="height:4px;background:var(--bdr);border-radius:99px;overflow:hidden">
             <div style="height:100%;width:${pct}%;background:${color};border-radius:99px;transition:width .5s"></div>
           </div>
-          <div style="font-size:10px;color:var(--tx3);margin-top:3px;display:flex;justify-content:space-between">
+          <div style="font-size:10px;color:var(--tx-3);margin-top:3px;display:flex;justify-content:space-between">
             <span>${fmt(spent)}</span><span>de ${fmt(b.limit)}</span>
           </div>
         </div>`;
@@ -1517,11 +1383,11 @@ function renderDashboard() {
       const isOver=next&&getInstParcelaStatus(i,next)==='overdue';
       return `<div class="di-item">
         <div class="di-top">
-          <span style="color:${isOver?'var(--red2)':'var(--tx)'}">${i.desc}${isOver?' ⚠':''}</span>
-          <span style="color:var(--red2);font-weight:600">${fmt(i.perMonth)}</span>
+          <span style="color:${isOver?'var(--red-l)':'var(--tx)'}">${i.desc}${isOver?' ⚠':''}</span>
+          <span style="color:var(--red-l);font-weight:600">${fmt(i.perMonth)}</span>
         </div>
-        <div class="di-bar-bg"><div class="di-bar" style="width:${pct}%;background:${isOver?'var(--red2)':'var(--blu2)'}"></div></div>
-        <div style="font-size:10px;color:var(--tx3);margin-top:2px">${getInstPaidCount(i)}/${i.count} pagas</div>
+        <div class="di-bar-bg"><div class="di-bar" style="width:${pct}%;background:${isOver?'var(--red-l)':'var(--blu-l)'}"></div></div>
+        <div style="font-size:10px;color:var(--tx-3);margin-top:2px">${getInstPaidCount(i)}/${i.count} pagas</div>
       </div>`;
     }).join(''):'<div class="empty-state">Sem parcelas ativas.</div>';
   }
@@ -1602,8 +1468,8 @@ async function initLock() {
       document.getElementById('setup-screen').style.display = 'none';
       const hint = localStorage.getItem('fp_pass_hint');
       document.getElementById('lock-footer').innerHTML =
-        (hint?`<div style="font-size:11px;color:var(--tx3);margin-bottom:8px">💡 Dica: <em>${hint}</em></div>`:'') +
-        `<span style="font-size:11px;color:var(--tx3)">Esqueceu a senha? <button onclick="showRecoveryInput()" style="background:none;border:none;color:var(--red2);cursor:pointer;font-size:11px;text-decoration:underline">Usar código de recuperação</button></span>`;
+        (hint?`<div style="font-size:11px;color:var(--tx-3);margin-bottom:8px">💡 Dica: <em>${hint}</em></div>`:'') +
+        `<span style="font-size:11px;color:var(--tx-3)">Esqueceu a senha? <button onclick="showRecoveryInput()" style="background:none;border:none;color:var(--red-l);cursor:pointer;font-size:11px;text-decoration:underline">Usar código de recuperação</button></span>`;
     }
   } catch(err) {
     console.error('initLock error:', err);
@@ -1795,3 +1661,241 @@ if(document.readyState==='loading'){
 } else {
   startApp();
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// INSTALLMENTS — FULL SYSTEM (cards, edit, pay, settle)
+// ═══════════════════════════════════════════════════════════════════
+let editingInstId = null, payingInstId = null, settlingInstId = null;
+
+function migrateInstallments() {
+  installments.forEach(inst => {
+    if (!inst.paidDates) {
+      inst.paidDates = [];
+      inst.dueDay = inst.dueDay || 10;
+      const oldPaid = inst.paid || 0;
+      for (let n = 1; n <= oldPaid; n++) {
+        const due = getInstDueDate(inst, n);
+        inst.paidDates.push({ parcelaNum: n, date: due.str, txId: null });
+      }
+    }
+  });
+  save();
+}
+
+function getInstDueDate(inst, n) {
+  const [sy, sm] = inst.start.split('-').map(Number);
+  let m = sm - 1 + (n - 1), y = sy;
+  while (m > 11) { m -= 12; y++; }
+  const day = Math.min(inst.dueDay || 10, lastDayOfMonth(y, m));
+  return { y, m, day, str: `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}` };
+}
+function getInstParcelaStatus(inst, n) {
+  if (!inst.paidDates) inst.paidDates = [];
+  if (inst.paidDates.find(p => p.parcelaNum === n)) return 'paid';
+  const due = getInstDueDate(inst, n);
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (new Date(due.str+'T00:00:00') < now) return 'overdue';
+  if (mkKey(due.y, due.m) === mkKey(new Date().getFullYear(), new Date().getMonth())) return 'pending';
+  return 'future';
+}
+function getInstNextUnpaid(inst) {
+  if (!inst.paidDates) inst.paidDates = [];
+  for (let n = 1; n <= inst.count; n++) {
+    if (!inst.paidDates.find(p => p.parcelaNum === n)) return n;
+  }
+  return null;
+}
+function getInstPaidCount(inst) { return inst.paidDates ? inst.paidDates.length : (inst.paid || 0); }
+function getInstRemainingAmount(inst) { return inst.perMonth * (inst.count - getInstPaidCount(inst)); }
+
+function renderInstallments() {
+  migrateInstallments();
+  const filter = document.getElementById('inst-filter')?.value || 'active';
+  const allActive = installments.filter(i => getInstPaidCount(i) < i.count);
+  const totalDebt = allActive.reduce((s,i) => s + getInstRemainingAmount(i), 0);
+  const nextMonthExp = allActive.reduce((s,i) => s + i.perMonth, 0);
+  const overdueCount = installments.filter(i => { const n=getInstNextUnpaid(i); return n && getInstParcelaStatus(i,n)==='overdue'; }).length;
+  const doneCount = installments.filter(i => getInstPaidCount(i) >= i.count).length;
+
+  const bar = document.getElementById('inst-summary-bar');
+  if (bar) bar.innerHTML = `
+    <div class="isb-item"><div class="isb-lbl">Dívida Total</div><div class="isb-val neg">${fmt(totalDebt)}</div></div>
+    <div class="isb-item"><div class="isb-lbl">Próximo Mês</div><div class="isb-val neg">${fmt(nextMonthExp)}</div></div>
+    <div class="isb-item"><div class="isb-lbl">Atrasadas</div><div class="isb-val" style="color:${overdueCount?'var(--red-l)':'var(--tx-1)'}">${overdueCount}</div></div>
+    <div class="isb-item"><div class="isb-lbl">Quitadas</div><div class="isb-val pos">${doneCount}</div></div>`;
+
+  let list = [...installments];
+  if (filter === 'active') list = list.filter(i => getInstPaidCount(i) < i.count);
+  if (filter === 'done')   list = list.filter(i => getInstPaidCount(i) >= i.count);
+
+  const el = document.getElementById('inst-list');
+  if (!el) return;
+  if (!list.length) { el.innerHTML = '<div class="empty-state">Nenhuma parcela encontrada.</div>'; return; }
+  el.innerHTML = list.map(inst => {
+    const paidCount = getInstPaidCount(inst);
+    const isDone = paidCount >= inst.count;
+    const rem = inst.count - paidCount;
+    const pct = Math.round(paidCount / inst.count * 100);
+    const remAmt = getInstRemainingAmount(inst);
+    const acc = accounts.find(a => a.id === inst.accountId);
+    const nextNum = getInstNextUnpaid(inst);
+    const isOverdue = nextNum && getInstParcelaStatus(inst, nextNum) === 'overdue';
+    const barColor = isDone ? 'var(--grn-l)' : isOverdue ? 'var(--red-l)' : 'var(--blu-l)';
+    const nextDue = nextNum ? getInstDueDate(inst, nextNum) : null;
+    const rows = Array.from({length: inst.count}, (_,i) => {
+      const n = i+1, due = getInstDueDate(inst, n);
+      const status = getInstParcelaStatus(inst, n);
+      const paidRec = inst.paidDates?.find(p => p.parcelaNum === n);
+      const labels = {paid:'Paga',pending:'A vencer',overdue:'Atrasada',future:'Futura'};
+      return `<div class="inst-parcela-row ${status}">
+        <div class="ipr-num">${n}/${inst.count}</div>
+        <div class="ipr-date">${status==='paid'&&paidRec?fmtDt(paidRec.date)+' ✓':fmtDt(due.str)}</div>
+        <div class="ipr-amount neg">${fmt(inst.perMonth)}</div>
+        <div class="ipr-status"><span class="status-chip ${status}">${labels[status]}</span></div>
+      </div>`;
+    }).join('');
+    return `<div class="inst-card${isDone?' done':''}${isOverdue?' overdue':''}" data-id="${inst.id}">
+      <div class="inst-card-header">
+        <div class="ich-left">
+          <div class="ich-color" style="background:${barColor}"></div>
+          <div class="ich-info">
+            <div class="ich-name">${inst.desc}${isOverdue?' ⚠':''}</div>
+            <div class="ich-meta">${CAT[inst.category]||inst.category} · ${acc?acc.name:'?'}${inst.note?' · '+inst.note:''}</div>
+          </div>
+        </div>
+        <div class="ich-right">
+          <div class="ich-amounts">
+            <div class="ich-per-month" style="color:${isDone?'var(--grn-l)':'var(--red-l)'}">${isDone?'Quitada':fmt(inst.perMonth)+'/mês'}</div>
+            <div class="ich-remaining">${isDone?paidCount+' pagas':rem+' restantes · '+fmt(remAmt)}</div>
+          </div>
+          <div class="ich-chevron">▾</div>
+        </div>
+      </div>
+      <div class="inst-card-progress">
+        <div class="icp-bar-bg"><div class="icp-bar" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="icp-labels"><span>${paidCount}/${inst.count} (${pct}%)</span><span>${isDone?'Quitada':nextDue?'Próx: '+fmtDt(nextDue.str):''}</span></div>
+      </div>
+      <div class="inst-card-actions">
+        ${!isDone&&nextNum?`<button class="small-btn" onclick="openPayInst(${inst.id})">💰 Pagar parcela ${nextNum}</button>`:''}
+        ${!isDone?`<button class="small-btn" onclick="openSettleInst(${inst.id})">⚡ Quitar tudo</button>`:''}
+        <button class="small-btn" onclick="editInst(${inst.id})">✎ Editar</button>
+        <button class="small-btn del" onclick="delInst(${inst.id})">✕ Excluir</button>
+      </div>
+      <div class="inst-card-body">
+        <div class="inst-parcela-header"><div>Nº</div><div>Data</div><div>Valor</div><div>Status</div></div>
+        <div class="inst-parcela-list">${rows}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.querySelectorAll('.inst-card-header').forEach(hdr => {
+    hdr.addEventListener('click', () => hdr.closest('.inst-card').classList.toggle('expanded'));
+  });
+}
+
+window.openPayInst = (id) => {
+  payingInstId = id;
+  const inst = installments.find(i => i.id === id);
+  const nextNum = getInstNextUnpaid(inst);
+  if (!nextNum) return showToast('Todas as parcelas já foram pagas!');
+  const due = getInstDueDate(inst, nextNum);
+  document.getElementById('mpinst-title').textContent = `Parcela ${nextNum}/${inst.count} — ${inst.desc}`;
+  document.getElementById('mpinst-info').innerHTML = `Vencimento: <strong>${fmtDt(due.str)}</strong> · Valor: <strong style="color:var(--red-l)">${fmt(inst.perMonth)}</strong>`;
+  document.getElementById('pi-amount').value = inst.perMonth.toFixed(2);
+  document.getElementById('pi-date').value = today();
+  const acc = document.getElementById('pi-account');
+  acc.innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if (inst.accountId) acc.value = inst.accountId;
+  document.getElementById('modal-pay-inst').style.display = 'flex';
+};
+
+document.getElementById('btn-cancel-pay-inst')?.addEventListener('click', () => document.getElementById('modal-pay-inst').style.display='none');
+document.getElementById('pay-inst-form')?.addEventListener('submit', e => {
+  e.preventDefault();
+  const inst = installments.find(i => i.id === payingInstId);
+  const nextNum = getInstNextUnpaid(inst);
+  const accountId = parseInt(document.getElementById('pi-account').value);
+  const date = document.getElementById('pi-date').value;
+  const amount = parseFloat(document.getElementById('pi-amount').value);
+  const txId = Date.now();
+  transactions.push({id:txId,desc:`${inst.desc} (${nextNum}/${inst.count})`,amount,accountId,category:inst.category,date,type:'expense',status:'paid',note:`Parcela ${nextNum} de ${inst.count}`});
+  if (!inst.paidDates) inst.paidDates = [];
+  inst.paidDates.push({parcelaNum:nextNum,date,txId});
+  inst.paid = inst.paidDates.length;
+  save();
+  document.getElementById('modal-pay-inst').style.display = 'none';
+  showToast(`Parcela ${nextNum}/${inst.count} paga!`);
+  renderInstallments(); renderDashboard(); updateSidebar();
+});
+
+window.openSettleInst = (id) => {
+  settlingInstId = id;
+  const inst = installments.find(i => i.id === id);
+  const remAmt = getInstRemainingAmount(inst);
+  document.getElementById('msettle-info').innerHTML = `<strong>${inst.desc}</strong><br>${inst.count-getInstPaidCount(inst)} parcelas · <strong style="color:var(--red-l)">${fmt(remAmt)}</strong>`;
+  document.getElementById('si-amount').value = remAmt.toFixed(2);
+  document.getElementById('si-date').value = today();
+  const acc = document.getElementById('si-account');
+  acc.innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if (inst.accountId) acc.value = inst.accountId;
+  document.getElementById('modal-settle-inst').style.display = 'flex';
+};
+
+document.getElementById('btn-cancel-settle')?.addEventListener('click', () => document.getElementById('modal-settle-inst').style.display='none');
+document.getElementById('settle-inst-form')?.addEventListener('submit', e => {
+  e.preventDefault();
+  const inst = installments.find(i => i.id === settlingInstId);
+  const accountId = parseInt(document.getElementById('si-account').value);
+  const date = document.getElementById('si-date').value;
+  const amount = parseFloat(document.getElementById('si-amount').value);
+  const txId = Date.now();
+  transactions.push({id:txId,desc:`${inst.desc} — Quitação antecipada`,amount,accountId,category:inst.category,date,type:'expense',status:'paid'});
+  if (!inst.paidDates) inst.paidDates = [];
+  for (let n = 1; n <= inst.count; n++) {
+    if (!inst.paidDates.find(p => p.parcelaNum === n)) inst.paidDates.push({parcelaNum:n,date,txId});
+  }
+  inst.paid = inst.count;
+  save();
+  document.getElementById('modal-settle-inst').style.display = 'none';
+  showToast(`${inst.desc} quitada!`);
+  renderInstallments(); renderDashboard(); updateSidebar();
+});
+
+window.editInst = (id) => {
+  const inst = installments.find(i => i.id === id); if (!inst) return;
+  editingInstId = id;
+  document.getElementById('minst-title').textContent = 'Editar Parcela';
+  document.getElementById('i-desc').value    = inst.desc;
+  document.getElementById('i-total').value   = inst.total;
+  document.getElementById('i-count').value   = inst.count;
+  document.getElementById('i-start').value   = inst.start;
+  document.getElementById('i-dueday').value  = inst.dueDay || 10;
+  document.getElementById('i-category').value = inst.category;
+  document.getElementById('i-note').value    = inst.note || '';
+  const acc = document.getElementById('i-account');
+  acc.innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
+  if (inst.accountId) acc.value = inst.accountId;
+  document.getElementById('modal-inst').style.display = 'flex';
+};
+
+window.delInst = (id) => {
+  if (!confirm('Excluir esta parcela?')) return;
+  installments = installments.filter(i => i.id !== id);
+  save(); renderInstallments(); renderDashboard(); showToast('Parcela excluída.');
+};
+
+document.getElementById('inst-filter')?.addEventListener('change', renderInstallments);
+
+// Preview per-month
+['i-total','i-count'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', () => {
+    const t=parseFloat(document.getElementById('i-total')?.value);
+    const c=parseInt(document.getElementById('i-count')?.value);
+    const p=document.getElementById('i-preview');
+    const pt=document.getElementById('i-preview-text');
+    if(p&&pt&&t>0&&c>0){pt.textContent=`${c}x de ${fmt(t/c)} = Total ${fmt(t)}`;p.style.display='';}
+    else if(p) p.style.display='none';
+  });
+});
+
+migrateInstallments();
