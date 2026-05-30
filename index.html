@@ -211,8 +211,33 @@
       </div>
 
       <div class="dash-charts">
-        <div class="chart-card"><div class="ct">Gastos por Categoria</div><div class="cw"><canvas id="c-pie"></canvas></div></div>
-        <div class="chart-card wide"><div class="ct">Fluxo de Caixa — 6 meses</div><div class="cw"><canvas id="c-line"></canvas></div></div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="ct">Gastos por Categoria</div>
+            <div class="chart-controls">
+              <button class="chart-ctrl-btn active" data-pie="doughnut" title="Rosca">◎</button>
+              <button class="chart-ctrl-btn" data-pie="pie" title="Pizza">⬤</button>
+              <button class="chart-ctrl-btn" data-pie="bar" title="Barras">▦</button>
+            </div>
+          </div>
+          <div class="cw"><canvas id="c-pie"></canvas></div>
+        </div>
+        <div class="chart-card wide">
+          <div class="chart-header">
+            <div class="ct">Fluxo de Caixa</div>
+            <div class="chart-controls">
+              <select class="chart-ctrl-select" id="line-period">
+                <option value="3">3 meses</option>
+                <option value="6" selected>6 meses</option>
+                <option value="12">12 meses</option>
+              </select>
+              <button class="chart-ctrl-btn active" data-line="bar" title="Barras">▦</button>
+              <button class="chart-ctrl-btn" data-line="line" title="Linha">〜</button>
+              <button class="chart-ctrl-btn" data-line="area" title="Área">◬</button>
+            </div>
+          </div>
+          <div class="cw"><canvas id="c-line"></canvas></div>
+        </div>
       </div>
 
       <div class="dash-bottom">
@@ -340,6 +365,44 @@
         <div class="inv-expenses" id="inv-expenses"></div>
       </div>
 
+      <!-- Modal: Edit Scheduled -->
+      <div class="modal-overlay" id="modal-edit-sched" style="display:none">
+        <div class="modal">
+          <div class="modal-title">Editar Agendamento</div>
+          <form id="edit-sched-form">
+            <div class="form-group"><label>Descrição</label><input type="text" id="es-desc" required/></div>
+            <div class="form-row">
+              <div class="form-group"><label>Valor (R$)</label><input type="number" id="es-amount" step="0.01" min="0.01" required/></div>
+              <div class="form-group"><label>Conta</label><select id="es-account"></select></div>
+            </div>
+            <div class="form-group"><label>Categoria</label>
+              <select id="es-category">
+                <option value="salario">💼 Salário</option><option value="moradia">🏠 Moradia</option>
+                <option value="alimentacao">🍔 Alimentação</option><option value="transporte">🚌 Transporte</option>
+                <option value="saude">💊 Saúde</option><option value="lazer">🎮 Lazer</option>
+                <option value="tecnologia">💻 Tecnologia</option><option value="assinaturas">📱 Assinaturas</option>
+                <option value="academia">🏋️ Academia</option><option value="freelance">⚡ Freelance</option>
+                <option value="outros">📦 Outros</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Tipo de Dia</label>
+                <select id="es-daytype">
+                  <option value="fixed">Dia fixo do mês</option>
+                  <option value="business">Nº dia útil do mês</option>
+                  <option value="lastday">Último dia do mês</option>
+                </select>
+              </div>
+              <div class="form-group"><label>Dia</label><input type="number" id="es-day" min="1" max="31"/></div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-ghost" id="btn-cancel-edit-sched">Cancelar</button>
+              <button type="submit" class="btn-primary">Salvar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Modal: Create/Edit Card -->
       <div class="modal-overlay" id="modal-card" style="display:none">
         <div class="modal">
@@ -355,6 +418,20 @@
               <div class="form-group"><label>Dia de Vencimento</label><input type="number" id="cc-due" min="1" max="31" placeholder="Ex: 5" required/></div>
             </div>
             <div class="closing-hint">Compras após o dia de fechamento entram na fatura do mês seguinte.</div>
+            <div class="form-group"><label>Banco / Ícone</label>
+              <div class="bank-icon-picker" id="bank-icon-picker">
+                <button type="button" class="bank-icon-btn active" data-bank="generic" title="Genérico">💳</button>
+                <button type="button" class="bank-icon-btn" data-bank="nubank" title="Nubank">🟣</button>
+                <button type="button" class="bank-icon-btn" data-bank="itau" title="Itaú">🟠</button>
+                <button type="button" class="bank-icon-btn" data-bank="bradesco" title="Bradesco">🔴</button>
+                <button type="button" class="bank-icon-btn" data-bank="bb" title="Banco do Brasil">💛</button>
+                <button type="button" class="bank-icon-btn" data-bank="caixa" title="Caixa">🔵</button>
+                <button type="button" class="bank-icon-btn" data-bank="inter" title="Inter">🟡</button>
+                <button type="button" class="bank-icon-btn" data-bank="xp" title="XP">⬛</button>
+                <button type="button" class="bank-icon-btn" data-bank="c6" title="C6 Bank">🖤</button>
+                <button type="button" class="bank-icon-btn" data-bank="picpay" title="PicPay">💚</button>
+              </div>
+            </div>
             <div class="form-group"><label>Cor</label>
               <div class="color-picker" id="cc-color-picker">
                 <div class="color-opt selected" data-color="#c0392b" style="background:#c0392b"></div>
