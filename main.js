@@ -589,8 +589,7 @@ function renderHistory(){
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 populateAccountSelects();
-renderDashboard();
-updateSidebar();
+// Dashboard renders after authentication
 
 // ═══════════════════════════════════════════════════════════════════
 // CREDIT CARDS STATE
@@ -1393,6 +1392,11 @@ function showApp() {
   document.getElementById('setup-screen').style.display    = 'none';
   document.getElementById('main-app').style.display        = '';
   sessionStorage.setItem('fp_unlocked','1');
+  // Trigger initial render now that user is authenticated
+  populateAccountSelects();
+  populateCreditCardSelects();
+  updateSidebar();
+  renderDashboard();
 }
 
 function generateRecoveryCode() {
@@ -1609,11 +1613,26 @@ document.getElementById('btn-clear-data')?.addEventListener('click',()=>{
 
 // INIT
 async function startApp() {
-  await initAccessCode();
-  initLock();
+  try {
+    await initAccessCode();
+    await initLock();
+  } catch(err) {
+    console.error('startApp error:', err);
+    // Fallback: show setup screen directly
+    try {
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('setup-screen').style.display   = 'flex';
+      const sc = document.getElementById('setup-card-access');
+      if(sc) sc.style.display = '';
+      const sf = document.getElementById('setup-card-form');
+      if(sf) sf.style.display = 'none';
+      const sr = document.getElementById('setup-card-recovery');
+      if(sr) sr.style.display = 'none';
+    } catch(e2) { console.error('Fallback failed:', e2); }
+  }
 }
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',startApp);
+  document.addEventListener('DOMContentLoaded', startApp);
 } else {
   startApp();
 }
@@ -2220,6 +2239,5 @@ document.getElementById('card-form')?.addEventListener('submit', e => {
 });
 
 // ── INIT ──────────────────────────────────────────────────────────
-renderDashboard();
-renderScheduled();
-renderBudget();
+// Don't render dashboard until user is authenticated
+// startApp handles initLock → showApp → then rendering happens via renderView()
