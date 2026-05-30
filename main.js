@@ -214,12 +214,17 @@ document.getElementById('dash-next')?.addEventListener('click',()=>{
 // ═══════════════════════════════════════════════════════════════════
 function renderAccounts(){
   const grid=document.getElementById('accounts-grid');
-  if(!accounts.length){ grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">Nenhuma conta cadastrada. Crie uma para começar.</div>'; return; }
+  if(!accounts.length){ grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">Nenhuma conta cadastrada.</div>'; return; }
+  const icons = typeof BANK_ICONS!=='undefined'?BANK_ICONS:{};
   grid.innerHTML=accounts.map(a=>{
     const bal=getAccountBalance(a.id);
+    const icon=icons[a.bank||'generic']||'🏦';
     return `<div class="acc-card">
       <div class="acc-stripe" style="background:${a.color}"></div>
-      <div class="acc-type-label">${ACC_TYPES[a.type]||a.type}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:22px;line-height:1">${icon}</span>
+        <div class="acc-type-label" style="margin-bottom:0">${ACC_TYPES[a.type]||a.type}</div>
+      </div>
       <div class="acc-name">${a.name}</div>
       <div class="acc-bal" style="color:${bal>=0?'var(--grn-l)':'var(--red-l)'}">${bal<0?'−':''}${fmt(bal)}</div>
       <div class="acc-actions">
@@ -230,37 +235,6 @@ function renderAccounts(){
   }).join('');
 }
 
-document.getElementById('btn-add-account')?.addEventListener('click',()=>{
-  editingAccountId=null;
-  document.getElementById('mac-title').textContent='Nova Conta';
-  document.getElementById('account-form').reset();
-  selectedColor='#c0392b';
-  document.querySelectorAll('.color-opt').forEach(o=>o.classList.toggle('selected',o.dataset.color===selectedColor));
-  document.getElementById('modal-account').style.display='flex';
-});
-document.getElementById('btn-cancel-account')?.addEventListener('click',()=>{document.getElementById('modal-account').style.display='none';});
-document.getElementById('ac-color-picker')?.addEventListener('click',e=>{
-  const opt=e.target.closest('.color-opt'); if(!opt) return;
-  document.querySelectorAll('.color-opt').forEach(o=>o.classList.remove('selected'));
-  opt.classList.add('selected'); selectedColor=opt.dataset.color;
-});
-document.getElementById('account-form')?.addEventListener('submit',e=>{
-  e.preventDefault();
-  const name=document.getElementById('ac-name').value.trim();
-  const type=document.getElementById('ac-type').value;
-  const balance=parseFloat(document.getElementById('ac-balance').value)||0;
-  if(!name) return showToast('Informe o nome da conta.','error');
-  if(editingAccountId){
-    const a=accounts.find(x=>x.id===editingAccountId);
-    a.name=name; a.type=type; a.color=selectedColor;
-  } else {
-    accounts.push({id:Date.now(),name,type,initialBalance:balance,color:selectedColor});
-  }
-  save(); populateAccountSelects(); renderAccounts(); updateSidebar();
-  document.getElementById('modal-account').style.display='none';
-  showToast(editingAccountId?'Conta atualizada!':'Conta criada!');
-  editingAccountId=null;
-});
 window.editAccount=id=>{
   const a=accounts.find(x=>x.id===id); if(!a) return;
   editingAccountId=id;
@@ -1209,24 +1183,7 @@ function renderDashboard() {
   // ── Month label
   document.getElementById('dash-month-label').textContent = mName(dashYear, dashMonth);
 
-  // ── Status tag
-  const statusEl = document.getElementById('dash-status-tag');
-  if (statusEl) {
-    const isCurrent = dashYear===now.getFullYear() && dashMonth===now.getMonth();
-    if (isCurrent) {
-      statusEl.textContent = 'Mês atual';
-      statusEl.className = 'dash-status-tag neutral';
-    } else if (balance > 0) {
-      statusEl.textContent = '↑ Positivo';
-      statusEl.className = 'dash-status-tag positive';
-    } else if (balance < 0) {
-      statusEl.textContent = '↓ Negativo';
-      statusEl.className = 'dash-status-tag negative';
-    } else {
-      statusEl.textContent = 'Zerado';
-      statusEl.className = 'dash-status-tag neutral';
-    }
-  }
+  // Status tag removed
 
   // ── Hero card
   const heroEl = document.getElementById('d-balance');
@@ -2054,18 +2011,32 @@ renderDashboard = function() {
 window.editSched = (id) => {
   const s = scheduled.find(x=>x.id===id); if(!s) return;
   editingSchedId = id;
+  editSchedType = s.type || 'expense';
+  const modal = document.getElementById('modal-edit-sched');
+  if (!modal) { showToast('Modal não encontrado.','error'); return; }
   document.getElementById('es-desc').value     = s.desc;
   document.getElementById('es-amount').value   = s.amount;
   document.getElementById('es-category').value = s.category;
   document.getElementById('es-daytype').value  = s.dayType;
   document.getElementById('es-day').value      = s.day || 5;
+  document.querySelectorAll('#es-type-toggle .type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.type === s.type);
+  });
   const acc = document.getElementById('es-account');
   acc.innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
   if(s.accountId) acc.value = s.accountId;
-  document.getElementById('modal-edit-sched').style.display='flex';
+  modal.style.display='flex';
 };
 document.getElementById('btn-cancel-edit-sched')?.addEventListener('click',()=>
   document.getElementById('modal-edit-sched').style.display='none');
+// Edit sched type toggle
+let editSchedType = 'expense';
+document.getElementById('es-type-toggle')?.addEventListener('click', e => {
+  const btn = e.target.closest('.type-btn'); if(!btn) return;
+  document.querySelectorAll('#es-type-toggle .type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); editSchedType = btn.dataset.type;
+});
+
 document.getElementById('edit-sched-form')?.addEventListener('submit',e=>{
   e.preventDefault();
   const s=scheduled.find(x=>x.id===editingSchedId); if(!s) return;
@@ -2075,6 +2046,7 @@ document.getElementById('edit-sched-form')?.addEventListener('submit',e=>{
   s.dayType=document.getElementById('es-daytype').value;
   s.day=parseInt(document.getElementById('es-day').value)||0;
   s.accountId=parseInt(document.getElementById('es-account').value);
+  s.type=editSchedType;
   save(); renderScheduled(); renderDashboard();
   document.getElementById('modal-edit-sched').style.display='none';
   showToast('Agendamento atualizado!'); editingSchedId=null;
