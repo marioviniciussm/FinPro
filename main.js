@@ -1022,7 +1022,6 @@ const _origRenderForecast = renderForecast;
 // We'll add credit card upcoming invoices to the fc-table note
 
 // ── DASHBOARD: show credit cards total ────────────────────────────
-const _origRenderDashboard = renderDashboard;
 
 // Re-init
 populateCreditCardSelects();
@@ -1901,22 +1900,34 @@ document.getElementById('inst-filter')?.addEventListener('change', renderInstall
 migrateInstallments();
 
 // ═══════════════════════════════════════════════════════════════════
-// PHASE 1 — CHART CONTROLS, EDIT SCHED, BUDGET EDIT, BANK ICONS
+// PHASE 1 — IMPROVEMENTS (clean, no function redeclarations)
 // ═══════════════════════════════════════════════════════════════════
 
 // ── CHART STATE ───────────────────────────────────────────────────
-let chartPieType  = 'doughnut';
-let chartLineType = 'bar';
+let chartPieType    = 'doughnut';
+let chartLineType   = 'bar';
 let chartLinePeriod = 6;
 
-// Distinct color palette for pie chart — maximum contrast
+// 15 distinct high-contrast colors
 const PIE_COLORS = [
   '#ef4444','#3b82f6','#22c55e','#f59e0b','#a78bfa',
   '#ec4899','#06b6d4','#84cc16','#f97316','#14b8a6',
   '#8b5cf6','#fb923c','#4ade80','#60a5fa','#fbbf24'
 ];
 
-// ── PIE TYPE BUTTONS ──────────────────────────────────────────────
+const BANK_ICONS = {
+  generic:'💳', nubank:'🟣', itau:'🟠', bradesco:'🔴',
+  bb:'💛', caixa:'🔵', inter:'🟡', xp:'⬛', c6:'🖤', picpay:'💚'
+};
+const BANK_COLORS = {
+  generic:'#6b21a8', nubank:'#820ad1', itau:'#f97316', bradesco:'#cc0000',
+  bb:'#f59e0b', caixa:'#1d4ed8', inter:'#ea580c', xp:'#111', c6:'#1a1a1a', picpay:'#21c25e'
+};
+
+let selectedBank    = 'generic';
+let editingSchedId  = null;
+
+// ── CHART CONTROLS ────────────────────────────────────────────────
 document.querySelectorAll('[data-pie]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('[data-pie]').forEach(b => b.classList.remove('active'));
@@ -1926,7 +1937,6 @@ document.querySelectorAll('[data-pie]').forEach(btn => {
   });
 });
 
-// ── LINE TYPE BUTTONS ─────────────────────────────────────────────
 document.querySelectorAll('[data-line]').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('[data-line]').forEach(b => b.classList.remove('active'));
@@ -1941,193 +1951,154 @@ document.getElementById('line-period')?.addEventListener('change', e => {
   renderDashboard();
 });
 
-// ── OVERRIDE renderDashboard PIE + LINE with new options ──────────
-const _baseRenderDashboard = renderDashboard;
-function renderDashboard() {
-  // Call the existing renderDashboard first (it's the one at line ~1195)
-  // We override only the chart portion by patching after
-  _baseRenderDashboard();
-}
-
-// Patch: override just the chart rendering after base runs
-// We do this by re-rendering charts after the base renderDashboard
-function renderDashCharts() {
-  const txs  = getTxForMonth(dashYear, dashMonth);
-  const insts = getInstForMonth(dashYear, dashMonth);
-
-  // PIE — category breakdown
+// ── STANDALONE CHART RENDERER (called from renderDashboard) ──────
+function renderDashCharts(txs, insts) {
+  // PIE
   const catMap = {};
-  txs.filter(t => t.type === 'expense').forEach(t => { catMap[t.category] = (catMap[t.category]||0) + t.amount; });
-  insts.forEach(i => { catMap[i.category] = (catMap[i.category]||0) + i.perMonth; });
+  txs.filter(t => t.type==='expense').forEach(t => { catMap[t.category]=(catMap[t.category]||0)+t.amount; });
+  insts.forEach(i => { catMap[i.category]=(catMap[i.category]||0)+i.perMonth; });
 
   destroyChart('c-pie');
   const pc = document.getElementById('c-pie');
-  if (!pc) return;
-
-  if (Object.keys(catMap).length) {
-    const labels = Object.keys(catMap).map(c => CAT[c]||c);
-    const values = Object.values(catMap);
-    const colors = PIE_COLORS.slice(0, labels.length);
-
-    const isBar = chartPieType === 'bar';
-    chartInstances['c-pie'] = new Chart(pc, {
-      type: isBar ? 'bar' : chartPieType,
-      data: isBar
-        ? { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 6, borderSkipped: false }] }
-        : { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: 'rgba(0,0,0,.2)', hoverOffset: 8 }] },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        cutout: chartPieType === 'doughnut' ? '65%' : undefined,
-        plugins: {
-          legend: { position: isBar ? 'bottom' : 'bottom', labels: { color: '#888', font: { size: 10 }, padding: 8, boxWidth: 10, usePointStyle: !isBar, pointStyle: 'circle' } },
-          tooltip: {
-            callbacks: {
-              label: ctx => ` ${fmt(ctx.parsed.r ?? ctx.parsed.y ?? ctx.parsed)}`,
-              title: ctx => ctx[0]?.label || ''
-            },
-            backgroundColor: 'rgba(15,15,20,.95)', padding: 10,
-            titleColor: '#fff', bodyColor: '#aaa',
-            borderColor: 'rgba(255,255,255,.08)', borderWidth: 1
-          }
-        },
-        scales: isBar ? {
-          x: { grid: { color: 'rgba(255,255,255,.03)' }, ticks: { color: '#555', font: { size: 9 }, maxRotation: 35 } },
-          y: { grid: { color: 'rgba(255,255,255,.03)' }, ticks: { color: '#555', font: { size: 9 }, callback: v => 'R$'+Math.round(v) } }
-        } : undefined,
-        hover: { mode: 'nearest', intersect: true }
-      }
-    });
-  } else {
-    const ctx = pc.getContext('2d');
-    ctx.clearRect(0,0,pc.width,pc.height);
-    ctx.fillStyle = '#333'; ctx.textAlign = 'center'; ctx.font = '12px DM Sans';
-    ctx.fillText('Sem gastos este mês', pc.width/2, pc.height/2);
+  if (pc) {
+    if (Object.keys(catMap).length) {
+      const labels = Object.keys(catMap).map(c=>CAT[c]||c);
+      const values = Object.values(catMap);
+      const colors = PIE_COLORS.slice(0, labels.length);
+      const isBar  = chartPieType === 'bar';
+      chartInstances['c-pie'] = new Chart(pc, {
+        type: isBar ? 'bar' : chartPieType,
+        data: isBar
+          ? { labels, datasets:[{data:values, backgroundColor:colors, borderRadius:6, borderSkipped:false}] }
+          : { labels, datasets:[{data:values, backgroundColor:colors, borderWidth:2, borderColor:'rgba(0,0,0,.2)', hoverOffset:8}] },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          cutout: chartPieType==='doughnut' ? '65%' : undefined,
+          plugins: {
+            legend:{ position:'bottom', labels:{color:'#888',font:{size:10},padding:8,boxWidth:10,usePointStyle:!isBar,pointStyle:'circle'} },
+            tooltip:{ backgroundColor:'rgba(15,15,20,.95)', padding:10, titleColor:'#fff', bodyColor:'#aaa', borderColor:'rgba(255,255,255,.08)', borderWidth:1,
+              callbacks:{ label: ctx => ` ${fmt(isBar ? ctx.parsed.y : ctx.parsed)}`, title: ctx => ctx[0]?.label||'' } }
+          },
+          scales: isBar ? {
+            x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#555',font:{size:9},maxRotation:35}},
+            y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#555',font:{size:9},callback:v=>'R$'+Math.round(v)}}
+          } : undefined
+        }
+      });
+    } else {
+      const ctx=pc.getContext('2d'); ctx.clearRect(0,0,pc.width,pc.height);
+      ctx.fillStyle='#333'; ctx.textAlign='center'; ctx.font='12px DM Sans';
+      ctx.fillText('Sem gastos este mês', pc.width/2, pc.height/2);
+    }
   }
 
-  // LINE — cashflow
-  const ll=[], li=[], le=[], lb=[];
-  for (let i = chartLinePeriod - 1; i >= 0; i--) {
-    let mo = dashMonth - i, y = dashYear;
-    while (mo < 0) { mo += 12; y--; }
-    const mtxs  = getTxForMonth(y, mo);
-    const minst = getInstForMonth(y, mo);
-    const inc = mtxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-    const exp = mtxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0) + minst.reduce((s,ii)=>s+ii.perMonth,0);
+  // LINE
+  const ll=[],li=[],le=[],lb=[];
+  for (let i=chartLinePeriod-1; i>=0; i--) {
+    let mo=dashMonth-i, y=dashYear;
+    while(mo<0){mo+=12;y--;}
+    const mt=getTxForMonth(y,mo), mi=getInstForMonth(y,mo);
+    const inc=mt.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp=mt.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0)+mi.reduce((s,ii)=>s+ii.perMonth,0);
     ll.push(mShort(y,mo)); li.push(inc); le.push(exp); lb.push(inc-exp);
   }
-
   destroyChart('c-line');
   const lineEl = document.getElementById('c-line');
   if (!lineEl) return;
-
-  const isLine = chartLineType === 'line' || chartLineType === 'area';
-  const isArea = chartLineType === 'area';
-
-  const tooltipOpts = {
-    backgroundColor: 'rgba(15,15,20,.95)', padding: 12,
-    titleColor: '#fff', bodyColor: '#aaa',
-    borderColor: 'rgba(255,255,255,.08)', borderWidth: 1,
-    callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` }
-  };
-
+  const isLine=chartLineType==='line'||chartLineType==='area';
+  const isArea=chartLineType==='area';
+  const ttOpts={ backgroundColor:'rgba(15,15,20,.95)', padding:12, titleColor:'#fff', bodyColor:'#aaa',
+    borderColor:'rgba(255,255,255,.08)', borderWidth:1, mode:'index', intersect:false,
+    callbacks:{ label: ctx=>`  ${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } };
   chartInstances['c-line'] = new Chart(lineEl, {
     type: isLine ? 'line' : 'bar',
-    data: { labels: ll, datasets: [
-      {
-        label: 'Entradas', data: li,
-        backgroundColor: isLine ? (isArea ? 'rgba(34,197,94,.12)' : 'transparent') : 'rgba(34,197,94,.55)',
-        borderColor: '#22c55e', borderWidth: isLine ? 2 : 0,
-        tension: .4, fill: isArea, pointRadius: isLine ? 4 : 0,
-        pointBackgroundColor: '#22c55e', pointHoverRadius: 7,
-        borderRadius: isLine ? 0 : 6, borderSkipped: false
-      },
-      {
-        label: 'Saídas', data: le,
-        backgroundColor: isLine ? (isArea ? 'rgba(239,68,68,.12)' : 'transparent') : 'rgba(239,68,68,.55)',
-        borderColor: '#ef4444', borderWidth: isLine ? 2 : 0,
-        tension: .4, fill: isArea, pointRadius: isLine ? 4 : 0,
-        pointBackgroundColor: '#ef4444', pointHoverRadius: 7,
-        borderRadius: isLine ? 0 : 6, borderSkipped: false
-      },
-      {
-        label: 'Saldo', data: lb, type: isLine ? 'line' : 'line',
-        borderColor: '#3b82f6', backgroundColor: 'transparent',
-        borderWidth: 2, borderDash: [5,3],
-        tension: .4, pointRadius: 4, pointBackgroundColor: '#3b82f6', pointHoverRadius: 7,
-        yAxisID: 'y2'
-      }
+    data:{ labels:ll, datasets:[
+      { label:'Entradas', data:li,
+        backgroundColor: isLine?(isArea?'rgba(34,197,94,.1)':'transparent'):'rgba(34,197,94,.55)',
+        borderColor:'#22c55e', borderWidth:isLine?2:0, tension:.4, fill:isArea,
+        pointRadius:isLine?4:0, pointBackgroundColor:'#22c55e', pointHoverRadius:7,
+        borderRadius:isLine?0:6, borderSkipped:false },
+      { label:'Saídas', data:le,
+        backgroundColor: isLine?(isArea?'rgba(239,68,68,.1)':'transparent'):'rgba(239,68,68,.55)',
+        borderColor:'#ef4444', borderWidth:isLine?2:0, tension:.4, fill:isArea,
+        pointRadius:isLine?4:0, pointBackgroundColor:'#ef4444', pointHoverRadius:7,
+        borderRadius:isLine?0:6, borderSkipped:false },
+      { label:'Saldo', data:lb, type:'line',
+        borderColor:'#3b82f6', backgroundColor:'transparent',
+        borderWidth:2, borderDash:[5,3], tension:.4,
+        pointRadius:4, pointBackgroundColor:'#3b82f6', pointHoverRadius:7, yAxisID:'y2' }
     ]},
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { labels: { color: '#777', font: { size: 10 }, boxWidth: 10, usePointStyle: true, pointStyle: 'circle' } },
-        tooltip: tooltipOpts
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,.03)' }, ticks: { color: '#555', font: { size: 10 } } },
-        y: { grid: { color: 'rgba(255,255,255,.03)' }, ticks: { color: '#555', font: { size: 10 }, callback: v => v===0?'0':'R$'+Math.round(v/1000)+'k' } },
-        y2: { position: 'right', grid: { display: false }, ticks: { color: '#3b82f6', font: { size: 9 }, callback: v => 'R$'+Math.round(v/1000)+'k' } }
+    options:{ responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{labels:{color:'#777',font:{size:10},boxWidth:10,usePointStyle:true,pointStyle:'circle'}}, tooltip:ttOpts },
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#555',font:{size:10}}},
+        y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#555',font:{size:10},callback:v=>v===0?'0':'R$'+Math.round(v/1000)+'k'}},
+        y2:{position:'right',grid:{display:false},ticks:{color:'#3b82f6',font:{size:9},callback:v=>'R$'+Math.round(v/1000)+'k'}}
       }
     }
   });
 }
 
-// ── EDIT SCHEDULED ────────────────────────────────────────────────
-let editingSchedId = null;
+// ── PATCH renderDashboard to call renderDashCharts ────────────────
+// Store original and wrap (only once)
+const _rd_original = renderDashboard;
+renderDashboard = function() {
+  _rd_original();
+  const txs   = getTxForMonth(dashYear, dashMonth);
+  const insts = getInstForMonth(dashYear, dashMonth);
+  requestAnimationFrame(() => renderDashCharts(txs, insts));
+};
 
+// ── EDIT SCHEDULED ────────────────────────────────────────────────
 window.editSched = (id) => {
-  const s = scheduled.find(x => x.id === id); if (!s) return;
+  const s = scheduled.find(x=>x.id===id); if(!s) return;
   editingSchedId = id;
-  document.getElementById('es-desc').value    = s.desc;
-  document.getElementById('es-amount').value  = s.amount;
+  document.getElementById('es-desc').value     = s.desc;
+  document.getElementById('es-amount').value   = s.amount;
   document.getElementById('es-category').value = s.category;
   document.getElementById('es-daytype').value  = s.dayType;
   document.getElementById('es-day').value      = s.day || 5;
   const acc = document.getElementById('es-account');
   acc.innerHTML = accounts.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
-  if (s.accountId) acc.value = s.accountId;
-  document.getElementById('modal-edit-sched').style.display = 'flex';
+  if(s.accountId) acc.value = s.accountId;
+  document.getElementById('modal-edit-sched').style.display='flex';
 };
-
-document.getElementById('btn-cancel-edit-sched')?.addEventListener('click', () =>
-  document.getElementById('modal-edit-sched').style.display = 'none');
-
-document.getElementById('edit-sched-form')?.addEventListener('submit', e => {
+document.getElementById('btn-cancel-edit-sched')?.addEventListener('click',()=>
+  document.getElementById('modal-edit-sched').style.display='none');
+document.getElementById('edit-sched-form')?.addEventListener('submit',e=>{
   e.preventDefault();
-  const s = scheduled.find(x => x.id === editingSchedId); if (!s) return;
-  s.desc      = document.getElementById('es-desc').value.trim();
-  s.amount    = parseFloat(document.getElementById('es-amount').value);
-  s.category  = document.getElementById('es-category').value;
-  s.dayType   = document.getElementById('es-daytype').value;
-  s.day       = parseInt(document.getElementById('es-day').value)||0;
-  s.accountId = parseInt(document.getElementById('es-account').value);
+  const s=scheduled.find(x=>x.id===editingSchedId); if(!s) return;
+  s.desc=document.getElementById('es-desc').value.trim();
+  s.amount=parseFloat(document.getElementById('es-amount').value);
+  s.category=document.getElementById('es-category').value;
+  s.dayType=document.getElementById('es-daytype').value;
+  s.day=parseInt(document.getElementById('es-day').value)||0;
+  s.accountId=parseInt(document.getElementById('es-account').value);
   save(); renderScheduled(); renderDashboard();
-  document.getElementById('modal-edit-sched').style.display = 'none';
-  showToast('Agendamento atualizado!');
-  editingSchedId = null;
+  document.getElementById('modal-edit-sched').style.display='none';
+  showToast('Agendamento atualizado!'); editingSchedId=null;
 });
 
-// Add edit button to renderScheduled
-const _baseRenderScheduled = renderScheduled;
-function renderScheduled() {
-  const el = document.getElementById('sched-list');
-  if (!el) return;
-  if (!scheduled.length) { el.innerHTML = '<div class="empty-state">Nenhum agendamento cadastrado.</div>'; return; }
-  el.innerHTML = scheduled.map(s => {
-    const acc = accounts.find(a => a.id === s.accountId);
-    let dayLabel = s.dayType === 'business' ? `${s.day}º dia útil` : s.dayType === 'lastday' ? 'Último dia' : `Dia ${s.day}`;
+// ── OVERRIDE renderScheduled with edit button ─────────────────────
+renderScheduled = function() {
+  const el=document.getElementById('sched-list');
+  if(!el) return;
+  if(!scheduled.length){el.innerHTML='<div class="empty-state">Nenhum agendamento cadastrado.</div>';return;}
+  el.innerHTML=scheduled.map(s=>{
+    const acc=accounts.find(a=>a.id===s.accountId);
+    const dayLabel=s.dayType==='business'?`${s.day}º dia útil`:s.dayType==='lastday'?'Último dia':`Dia ${s.day}`;
     return `<div class="sched-item">
       <div class="sched-left">
         <div class="sched-stripe" style="background:${s.type==='income'?'var(--grn-l)':'var(--red-l)'}"></div>
         <div>
-          <div class="sched-name">${s.desc} ${!s.active?'<span style="font-size:10px;color:var(--tx-3)">(pausado)</span>':''}</div>
+          <div class="sched-name">${s.desc}${!s.active?' <span style="font-size:10px;color:var(--tx-3)">(pausado)</span>':''}</div>
           <div class="sched-meta">${CAT[s.category]||s.category} · ${acc?acc.name:'?'} · ${dayLabel}/mês</div>
         </div>
       </div>
       <div class="sched-right">
         <div class="sched-amt" style="color:${s.type==='income'?'var(--grn-l)':'var(--red-l)'}">${s.type==='expense'?'−':'+'}${fmt(s.amount)}</div>
-        <div class="sched-item-actions">
+        <div style="display:flex;gap:6px">
           <button class="small-btn" onclick="editSched(${s.id})">✎</button>
           <button class="small-btn" onclick="toggleSched(${s.id})">${s.active?'⏸':'▶'}</button>
           <button class="small-btn del" onclick="deleteSched(${s.id})">✕</button>
@@ -2135,146 +2106,92 @@ function renderScheduled() {
       </div>
     </div>`;
   }).join('');
-}
+};
 
-// ── BUDGET EDIT + OVERFLOW ────────────────────────────────────────
-function renderBudget() {
-  const now = new Date();
-  const mk  = mkKey(now.getFullYear(), now.getMonth());
-  const budMonthEl = document.getElementById('bud-month-label');
-  if (budMonthEl) budMonthEl.textContent = mName(now.getFullYear(), now.getMonth());
-
-  const txs   = getTxForMonth(now.getFullYear(), now.getMonth());
-  const scheds = getSchedForMonth(now.getFullYear(), now.getMonth()).filter(s => s.type === 'expense');
-  const insts  = getInstForMonth(now.getFullYear(), now.getMonth());
-  const catSpent = {};
-  txs.filter(t => t.type === 'expense').forEach(t => { catSpent[t.category] = (catSpent[t.category]||0) + t.amount; });
-  scheds.forEach(s => { catSpent[s.category] = (catSpent[s.category]||0) + s.amount; });
-  insts.forEach(i => { catSpent[i.category] = (catSpent[i.category]||0) + i.perMonth; });
-
-  const monthBudgets = budgets.filter(b => b.month === mk);
-  const grid = document.getElementById('budget-grid');
-  if (!grid) return;
-
-  if (!monthBudgets.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Defina limites abaixo para ver o orçamento.</div>';
-  } else {
-    grid.innerHTML = monthBudgets.map(b => {
-      const spent   = catSpent[b.category] || 0;
-      const rawPct  = Math.round(spent / b.limit * 100);
-      const barPct  = Math.min(rawPct, 100);
-      const isOver  = rawPct > 100;
-      const color   = isOver ? 'var(--red-l)' : rawPct >= 75 ? 'var(--ylw-l)' : 'var(--grn-l)';
-      const overflow = isOver ? spent - b.limit : 0;
-      return `<div class="budget-item">
-        <div class="bud-top">
-          <span class="bud-cat">${CAT[b.category]||b.category}</span>
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="bud-pct" style="color:${color}">${rawPct}%${isOver?' ⚠':''}</span>
-            <button class="small-btn" onclick="editBudget('${b.category}','${mk}')" title="Editar limite">✎</button>
-            <button class="small-btn del" onclick="delBudget('${b.category}','${mk}')" title="Remover">✕</button>
-          </div>
+// ── OVERRIDE renderBudget with edit + real overflow ───────────────
+renderBudget = function() {
+  const now=new Date(), mk=mkKey(now.getFullYear(),now.getMonth());
+  const budMonthEl=document.getElementById('bud-month-label');
+  if(budMonthEl) budMonthEl.textContent=mName(now.getFullYear(),now.getMonth());
+  const txs=getTxForMonth(now.getFullYear(),now.getMonth());
+  const scheds=getSchedForMonth(now.getFullYear(),now.getMonth()).filter(s=>s.type==='expense');
+  const insts=getInstForMonth(now.getFullYear(),now.getMonth());
+  const catSpent={};
+  txs.filter(t=>t.type==='expense').forEach(t=>{catSpent[t.category]=(catSpent[t.category]||0)+t.amount;});
+  scheds.forEach(s=>{catSpent[s.category]=(catSpent[s.category]||0)+s.amount;});
+  insts.forEach(i=>{catSpent[i.category]=(catSpent[i.category]||0)+i.perMonth;});
+  const grid=document.getElementById('budget-grid');
+  if(!grid) return;
+  const monthBudgets=budgets.filter(b=>b.month===mk);
+  if(!monthBudgets.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">Defina limites abaixo para ver o orçamento.</div>';return;}
+  grid.innerHTML=monthBudgets.map(b=>{
+    const spent=catSpent[b.category]||0;
+    const rawPct=Math.round(spent/b.limit*100);
+    const barPct=Math.min(rawPct,100);
+    const isOver=rawPct>100;
+    const color=isOver?'var(--red-l)':rawPct>=75?'var(--ylw-l)':'var(--grn-l)';
+    const overflow=isOver?spent-b.limit:0;
+    return `<div class="budget-item">
+      <div class="bud-top">
+        <span class="bud-cat">${CAT[b.category]||b.category}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="bud-pct" style="color:${color}">${rawPct}%${isOver?' ⚠':''}</span>
+          <button class="small-btn" onclick="editBudgetLimit('${b.category}','${mk}')">✎</button>
+          <button class="small-btn del" onclick="delBudget('${b.category}','${mk}')">✕</button>
         </div>
-        <div class="bud-bar-bg"><div class="bud-bar" style="width:${barPct}%;background:${color}"></div></div>
-        <div class="bud-vals">
-          <span>${fmt(spent)} gasto</span>
-          <span>${isOver ? `<span class="bud-overflow">+${fmt(overflow)} acima</span>` : fmt(b.limit-spent)+' restante'}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }
-}
+      </div>
+      <div class="bud-bar-bg"><div class="bud-bar" style="width:${barPct}%;background:${color}"></div></div>
+      <div class="bud-vals">
+        <span>${fmt(spent)} gasto</span>
+        <span style="color:${isOver?'var(--red-l)':'var(--tx-3)'}">${isOver?'+'+fmt(overflow)+' acima':fmt(b.limit-spent)+' restante'}</span>
+      </div>
+    </div>`;
+  }).join('');
+};
 
-window.editBudget = (cat, mk) => {
-  const b = budgets.find(x => x.category === cat && x.month === mk);
-  if (!b) return;
-  document.getElementById('b-cat').value   = cat;
-  document.getElementById('b-limit').value = b.limit;
-  showToast('Edite o valor abaixo e clique em Definir Limite.');
+window.editBudgetLimit=(cat,mk)=>{
+  const b=budgets.find(x=>x.category===cat&&x.month===mk); if(!b) return;
+  document.getElementById('b-cat').value=cat;
+  document.getElementById('b-limit').value=b.limit;
   document.getElementById('b-limit').focus();
-};
-window.delBudget = (cat, mk) => {
-  budgets = budgets.filter(b => !(b.category===cat && b.month===mk));
-  save(); renderBudget(); showToast('Limite removido.');
+  showToast('Edite o valor e clique em Definir Limite.');
 };
 
-// ── BANK ICONS FOR CREDIT CARDS ───────────────────────────────────
-const BANK_ICONS = {
-  generic:'💳', nubank:'🟣', itau:'🟠', bradesco:'🔴',
-  bb:'💛', caixa:'🔵', inter:'🟡', xp:'⬛', c6:'🖤', picpay:'💚'
-};
-const BANK_COLORS = {
-  generic:'#6b21a8', nubank:'#820ad1', itau:'#f97316', bradesco:'#cc0000',
-  bb:'#f59e0b', caixa:'#1d4ed8', inter:'#ea580c', xp:'#111', c6:'#1a1a1a', picpay:'#21c25e'
-};
-
-let selectedBank = 'generic';
-
-document.getElementById('bank-icon-picker')?.addEventListener('click', e => {
-  const btn = e.target.closest('.bank-icon-btn'); if (!btn) return;
-  document.querySelectorAll('.bank-icon-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  selectedBank = btn.dataset.bank;
-  // Auto-set color if bank has a predefined color
-  const color = BANK_COLORS[selectedBank];
-  if (color) {
-    selectedCardColor = color;
-    document.querySelectorAll('#cc-color-picker .color-opt').forEach(o => o.classList.remove('selected'));
+// ── BANK ICON PICKER ──────────────────────────────────────────────
+document.getElementById('bank-icon-picker')?.addEventListener('click',e=>{
+  const btn=e.target.closest('.bank-icon-btn'); if(!btn) return;
+  document.querySelectorAll('.bank-icon-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); selectedBank=btn.dataset.bank;
+  const color=BANK_COLORS[selectedBank];
+  if(color){
+    selectedCardColor=color;
+    document.querySelectorAll('#cc-color-picker .color-opt').forEach(o=>o.classList.remove('selected'));
   }
 });
 
-// ── SKIPPED SCHED LOGIC — only skip for PAST months, future auto-shows ──
-// Override getPendingForMonth to be smarter about skipped items
-function getPendingForMonth(y, m) {
-  const invKey  = mkKey(y, m);
-  const now     = new Date();
-  const today_d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  return scheduled.filter(s => s.active).filter(s => {
-    // Already confirmed this month
-    if (isSchedConfirmed(s.id, invKey)) return false;
-    // Only skip if explicitly skipped THIS month
-    if (isSchedSkipped(s.id, invKey)) return false;
-    // Only show if scheduled day has passed or is today
-    const day = getScheduledDateForMonth(s, y, m);
-    if (!day) return false;
-    const schedDate = new Date(y, m, day);
-    return schedDate <= today_d;
-  });
-}
-
-// Future months always get fresh pending items (skipped only applies to the specific month)
-// This is already handled since isSchedSkipped checks the invKey which includes month
-
-// ── CARD RENDERING WITH BANK ICONS ───────────────────────────────
-const _baseRenderCards = renderCards;
-function renderCards() {
+// ── OVERRIDE renderCards with bank icons ──────────────────────────
+renderCards = function() {
   populateCreditCardSelects();
-  document.getElementById('cards-grid').style.display = '';
-  document.getElementById('invoice-panel').style.display = 'none';
-
-  const grid = document.getElementById('cards-grid');
-  if (!creditCards.length) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Nenhum cartão cadastrado.</div>';
-    return;
-  }
-  grid.innerHTML = creditCards.map(card => {
-    const used      = getCardUsed(card.id);
-    const available = card.limit - used;
-    const pct       = Math.min(Math.round(used / card.limit * 100), 100);
-    const curKey    = getCardCurrentInvoiceKey(card);
-    const curTotal  = getCardInvoiceTotal(card.id, curKey);
-    const dueDate   = getInvoiceDueDate(card, curKey);
-    const dueFmt    = new Date(dueDate+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
-    const barColor  = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : 'rgba(255,255,255,.85)';
-    const bankIcon  = BANK_ICONS[card.bank || 'generic'] || '💳';
-    const cardColor = card.color || BANK_COLORS[card.bank || 'generic'] || '#6b21a8';
-
+  document.getElementById('cards-grid').style.display='';
+  document.getElementById('invoice-panel').style.display='none';
+  const grid=document.getElementById('cards-grid');
+  if(!creditCards.length){grid.innerHTML='<div class="empty-state" style="grid-column:1/-1">Nenhum cartão cadastrado.</div>';return;}
+  grid.innerHTML=creditCards.map(card=>{
+    const used=getCardUsed(card.id);
+    const available=card.limit-used;
+    const pct=Math.min(Math.round(used/card.limit*100),100);
+    const curKey=getCardCurrentInvoiceKey(card);
+    const curTotal=getCardInvoiceTotal(card.id,curKey);
+    const dueDate=getInvoiceDueDate(card,curKey);
+    const dueFmt=new Date(dueDate+'T00:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
+    const barColor=pct>=90?'#ef4444':pct>=70?'#f59e0b':'rgba(255,255,255,.85)';
+    const bankIcon=BANK_ICONS[card.bank||'generic']||'💳';
+    const cardColor=card.color||BANK_COLORS[card.bank||'generic']||'#6b21a8';
     return `<div class="cc-card" style="background:linear-gradient(135deg,${cardColor}dd,${cardColor}88)">
       <div class="cc-card-bg"></div>
       <div class="cc-card-top">
         <div>
-          <div style="font-size:24px;margin-bottom:4px">${bankIcon}</div>
+          <div style="font-size:24px;margin-bottom:4px;line-height:1">${bankIcon}</div>
           <div class="cc-card-name">${card.name}</div>
           <div class="cc-card-type">Cartão de Crédito</div>
         </div>
@@ -2291,51 +2208,46 @@ function renderCards() {
       <div class="cc-card-bottom">
         <div class="cc-limit-bar-bg"><div class="cc-limit-bar" style="width:${pct}%;background:${barColor}"></div></div>
         <div class="cc-card-info">
-          <span>${pct}% usado · ${fmt(available)} disponível</span>
+          <span>${pct}% · ${fmt(available)} disponível</span>
           <span>Vence ${dueFmt} · Fecha dia ${card.closingDay}</span>
         </div>
         <div class="cc-card-actions">
           <button class="cc-btn" onclick="openInvoicePanel(${card.id})">Ver Faturas</button>
-          ${curTotal > 0 ? `<button class="cc-btn pay" onclick="openPayInvoice(${card.id},'${curKey}')">Pagar Fatura</button>` : ''}
+          ${curTotal>0?`<button class="cc-btn pay" onclick="openPayInvoice(${card.id},'${curKey}')">Pagar</button>`:''}
         </div>
       </div>
     </div>`;
   }).join('');
-}
+};
 
-// Include bank in card save
-const _baseCardFormSubmit = document.getElementById('card-form');
-if (_baseCardFormSubmit) {
-  _baseCardFormSubmit.addEventListener('submit', e => {
-    e.preventDefault();
-    const name      = document.getElementById('cc-name').value.trim();
-    const limit     = parseFloat(document.getElementById('cc-limit').value);
-    const closingDay = parseInt(document.getElementById('cc-closing').value);
-    const dueDay    = parseInt(document.getElementById('cc-due').value);
-    const paymentAccountId = parseInt(document.getElementById('cc-account').value)||null;
-    if (!name||!limit||!closingDay||!dueDay) return showToast('Preencha todos os campos.','error');
-    if (editingCardId) {
-      const c = creditCards.find(x => x.id === editingCardId);
-      Object.assign(c, {name,limit,closingDay,dueDay,paymentAccountId,color:selectedCardColor,bank:selectedBank});
-    } else {
-      creditCards.push({id:Date.now(),name,limit,closingDay,dueDay,paymentAccountId,color:selectedCardColor,bank:selectedBank});
+// ── SAVE BANK IN CARD FORM ────────────────────────────────────────
+// Patch editCard to also restore bank icon
+const _baseEditCard = window.editCard;
+window.editCard = id => {
+  _baseEditCard(id);
+  const c=creditCards.find(x=>x.id===id); if(!c) return;
+  selectedBank=c.bank||'generic';
+  document.querySelectorAll('.bank-icon-btn').forEach(b=>b.classList.toggle('active',b.dataset.bank===selectedBank));
+};
+
+// Override card form submit to include bank
+document.getElementById('card-form')?.addEventListener('submit', e => {
+  // Find the card that was just saved and add the bank
+  setTimeout(() => {
+    const lastCard = creditCards[creditCards.length - 1];
+    if (lastCard && !lastCard.bank) {
+      lastCard.bank = selectedBank;
+      saveCards();
     }
-    saveCards(); populateCreditCardSelects(); renderCards();
-    document.getElementById('modal-card').style.display='none';
-    showToast(editingCardId?'Cartão atualizado!':'Cartão criado!');
-    editingCardId=null;
-  }, { once: false });
-}
+    // Also update if editing
+    if (editingCardId) {
+      const c = creditCards.find(x=>x.id===editingCardId);
+      if (c) { c.bank = selectedBank; saveCards(); }
+    }
+  }, 50);
+});
 
-// Re-init renderDashboard to also call renderDashCharts
-const __finalRenderDashboard = renderDashboard;
-function renderDashboard() {
-  __finalRenderDashboard();
-  // Small delay to let canvas render
-  requestAnimationFrame(renderDashCharts);
-}
-
-// Force re-render
+// ── INIT ──────────────────────────────────────────────────────────
 renderDashboard();
 renderScheduled();
 renderBudget();
