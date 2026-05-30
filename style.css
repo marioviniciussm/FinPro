@@ -933,3 +933,63 @@ select option, select optgroup { background: var(--surf-3); }
   .lock-input-wrap input { font-size: 16px; padding: 14px 44px 14px 16px; min-height: 50px; }
   .lock-btn { min-height: 50px; font-size: 16px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 1 IMPROVEMENTS
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Chart controls ── */
+.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 8px; flex-wrap: wrap; }
+.chart-controls { display: flex; align-items: center; gap: 4px; }
+.chart-ctrl-btn {
+  width: 28px; height: 28px; background: var(--surf-3); border: 1px solid var(--bdr);
+  color: var(--tx-3); border-radius: var(--r-xs); cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--tx-fast);
+}
+.chart-ctrl-btn:hover { background: var(--surf-4); color: var(--tx-1); }
+.chart-ctrl-btn.active { background: var(--red-bg); border-color: var(--red-bdr); color: var(--red-l); }
+.chart-ctrl-select {
+  height: 28px; padding: 0 8px; background: var(--surf-3); border: 1px solid var(--bdr);
+  color: var(--tx-2); border-radius: var(--r-xs); font-size: 11px; cursor: pointer;
+  font-family: var(--fb); min-width: 80px; appearance: none;
+}
+.chart-ctrl-select:focus { border-color: var(--red); outline: none; }
+
+/* ── Bank icon picker ── */
+.bank-icon-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+.bank-icon-btn {
+  width: 36px; height: 36px; background: var(--surf-3); border: 2px solid var(--bdr);
+  border-radius: 10px; cursor: pointer; font-size: 18px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--tx-fast);
+}
+.bank-icon-btn:hover { border-color: var(--bdr-2); transform: scale(1.08); }
+.bank-icon-btn.active { border-color: var(--red-l); background: var(--red-bg); }
+
+/* ── Wider sidebar ── */
+:root { --sw: 280px; }
+.nav-btn { font-size: 14px; padding: 10px 14px; }
+.nav-btn i { font-size: 16px; width: 22px; }
+.nav-group-label { font-size: 10.5px; padding: 12px 12px 4px; }
+.logo-text { font-size: 20px; }
+.logo-mark { width: 38px; height: 38px; font-size: 18px; border-radius: 12px; }
+
+/* ── Overflow fix ── */
+.main { overflow-x: hidden; }
+.dash-charts { min-width: 0; }
+.chart-card { min-width: 0; overflow: hidden; }
+.cw canvas { max-width: 100%; }
+
+/* ── Budget overflow ── */
+.bud-overflow { color: var(--red-l); font-size: 11px; font-weight: 700; }
+
+/* ── Sched edit card actions ── */
+.sched-item-actions { display: flex; gap: 6px; align-items: center; }
+
+@media (max-width: 768px) {
+  .chart-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .chart-controls { width: 100%; justify-content: flex-end; }
+  .bank-icon-picker { gap: 5px; }
+  .bank-icon-btn { width: 34px; height: 34px; font-size: 16px; }
+}
