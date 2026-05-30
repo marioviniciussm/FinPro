@@ -137,7 +137,7 @@
       <button class="nav-btn" data-view="forecast"><i>◉</i>Previsão</button>
 
       <div class="nav-group-label">Sistema</div>
-      <button class="nav-btn" data-view="data"><i>⇅</i>Dados</button>
+      <button class="nav-btn" data-view="data"><i>⇅</i>Backup</button>
     </nav>
     <div class="sidebar-accounts" id="sb-accounts"></div>
   </aside>
@@ -153,7 +153,6 @@
           <span class="dash-month-title" id="dash-month-label"></span>
           <button class="month-nav-btn" id="dash-next">›</button>
         </div>
-        <div id="dash-status-tag"></div>
       </div>
 
       <div class="hero-card">
@@ -199,7 +198,7 @@
         <div class="kpi-pill blue">
           <div class="kpi-pill-icon">⟳</div>
           <div class="kpi-pill-body">
-            <div class="kpi-pill-label">Fixos</div>
+            <div class="kpi-pill-label">Agend. Fixos</div>
             <div class="kpi-pill-val" id="d-sched-total">R$ 0,00</div>
           </div>
         </div>
@@ -264,21 +263,24 @@
                   <option value="savings">Poupança</option>
                   <option value="wallet">Carteira</option>
                   <option value="investment">Investimento</option>
-                  <option value="credit">Cartão de Crédito</option>
                 </select>
               </div>
               <div class="form-group"><label>Saldo Inicial (R$)</label><input type="number" id="ac-balance" step="0.01" placeholder="0,00" required/></div>
             </div>
-            <div class="form-group"><label>Cor</label>
-              <div class="color-picker" id="ac-color-picker">
-                <div class="color-opt selected" data-color="#c0392b" style="background:#c0392b"></div>
-                <div class="color-opt" data-color="#27ae60" style="background:#27ae60"></div>
-                <div class="color-opt" data-color="#2980b9" style="background:#2980b9"></div>
-                <div class="color-opt" data-color="#8e44ad" style="background:#8e44ad"></div>
-                <div class="color-opt" data-color="#e67e22" style="background:#e67e22"></div>
-                <div class="color-opt" data-color="#16a085" style="background:#16a085"></div>
-                <div class="color-opt" data-color="#f39c12" style="background:#f39c12"></div>
-                <div class="color-opt" data-color="#d35400" style="background:#d35400"></div>
+            <div class="form-group"><label>Banco</label>
+              <div class="bank-icon-picker" id="ac-bank-picker">
+                <button type="button" class="bank-icon-btn active" data-bank="generic" title="Genérico">🏦</button>
+                <button type="button" class="bank-icon-btn" data-bank="nubank" title="Nubank">🟣</button>
+                <button type="button" class="bank-icon-btn" data-bank="itau" title="Itaú">🟠</button>
+                <button type="button" class="bank-icon-btn" data-bank="bradesco" title="Bradesco">🔴</button>
+                <button type="button" class="bank-icon-btn" data-bank="bb" title="Banco do Brasil">💛</button>
+                <button type="button" class="bank-icon-btn" data-bank="caixa" title="Caixa">🔵</button>
+                <button type="button" class="bank-icon-btn" data-bank="inter" title="Inter">🟡</button>
+                <button type="button" class="bank-icon-btn" data-bank="xp" title="XP">⬛</button>
+                <button type="button" class="bank-icon-btn" data-bank="c6" title="C6 Bank">🖤</button>
+                <button type="button" class="bank-icon-btn" data-bank="picpay" title="PicPay">💚</button>
+                <button type="button" class="bank-icon-btn" data-bank="sicoob" title="Sicoob">🟢</button>
+                <button type="button" class="bank-icon-btn" data-bank="santander" title="Santander">🔴</button>
               </div>
             </div>
             <div class="modal-actions"><button type="button" class="btn-ghost" id="btn-cancel-account">Cancelar</button><button type="submit" class="btn-primary">Salvar</button></div>
@@ -370,6 +372,10 @@
         <div class="modal">
           <div class="modal-title">Editar Agendamento</div>
           <form id="edit-sched-form">
+            <div class="type-toggle small" id="es-type-toggle">
+              <button type="button" class="type-btn active" data-type="expense">Saída</button>
+              <button type="button" class="type-btn" data-type="income">Entrada</button>
+            </div>
             <div class="form-group"><label>Descrição</label><input type="text" id="es-desc" required/></div>
             <div class="form-row">
               <div class="form-group"><label>Valor (R$)</label><input type="number" id="es-amount" step="0.01" min="0.01" required/></div>
